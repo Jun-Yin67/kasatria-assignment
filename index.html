@@ -424,8 +424,12 @@
 				[tA, tB, tC]  // opposite tD
 			];
 
-			const tetraRows = 10;
 			const pointsPerFace = Math.ceil(objects.length / tetraFaces.length);
+
+			// find the smallest row count whose triangular number can hold pointsPerFace
+			let tetraRows = 1;
+			while ((tetraRows * (tetraRows + 1)) / 2 < pointsPerFace) tetraRows++;
+
 			let tetraObjIndex = 0;
 
 			for (let f = 0; f < tetraFaces.length; f++) {
@@ -443,19 +447,32 @@
 				if (normal.dot(faceCenter) < 0) normal.negate();
 
 				let facePointCount = 0;
+				const remaining = Math.min(pointsPerFace, objects.length - tetraObjIndex);
 
-				faceLoop:
-				for (let row = 0; row < tetraRows; row++) {
+				for (let row = 0; row < tetraRows && facePointCount < remaining; row++) {
 
-					for (let col = 0; col <= row; col++) {
+					const fullRowCount = row + 1;
+					const rowsLeft = tetraRows - row;
+					const pointsLeftToPlace = remaining - facePointCount;
 
-						if (facePointCount >= pointsPerFace || tetraObjIndex >= objects.length) break faceLoop;
+					// how many tiles this row should actually get, capped by what's left overall
+					const thisRowCount = Math.min(fullRowCount, pointsLeftToPlace, Math.ceil(pointsLeftToPlace / rowsLeft) + fullRowCount - Math.ceil(pointsLeftToPlace / rowsLeft));
+					const count = Math.min(fullRowCount, pointsLeftToPlace);
 
-						const t = row / (tetraRows - 1);
-						const left = new THREE.Vector3().lerpVectors(A, B, t);
-						const right = new THREE.Vector3().lerpVectors(A, C, t);
-						const s = row === 0 ? 0 : col / row;
-						const point = new THREE.Vector3().lerpVectors(left, right, s);
+					// center the tiles in this row instead of packing them to one side
+					const startOffset = (fullRowCount - count) / 2;
+
+					const t = row / (tetraRows - 1);
+					const left = new THREE.Vector3().lerpVectors(A, B, t);
+					const right = new THREE.Vector3().lerpVectors(A, C, t);
+
+					for (let col = 0; col < count; col++) {
+
+						if (tetraObjIndex >= objects.length) break;
+
+						const colPos = startOffset + col;
+						const s = row === 0 ? 0 : colPos / row;
+						const point = new THREE.Vector3().lerpVectors(left, right, Math.min(s, 1));
 
 						const object = new THREE.Object3D();
 						object.position.copy(point);
@@ -469,7 +486,9 @@
 						tetraObjIndex++;
 
 					}
+
 				}
+
 			}
 			renderer = new CSS3DRenderer();
 			renderer.setSize(window.innerWidth, window.innerHeight);
