@@ -12,16 +12,16 @@
 	<link type="text/css" rel="stylesheet" href="main.css">
 
 	<script>
-		window.handleCredentialResponse = function ( response ) {
+		window.handleCredentialResponse = function (response) {
 
-			console.log( 'Login callback fired', response );
+			console.log('Login callback fired', response);
 
-			document.getElementById( 'login-screen' ).style.display = 'none';
-			document.getElementById( 'container' ).style.display = 'block';
-			document.getElementById( 'menu' ).style.display = 'grid';
-			document.getElementById( 'info' ).style.display = 'block';
+			document.getElementById('login-screen').style.display = 'none';
+			document.getElementById('container').style.display = 'block';
+			document.getElementById('menu').style.display = 'grid';
+			document.getElementById('info').style.display = 'block';
 
-			window.dispatchEvent( new CustomEvent( 'kasatria-login-success' ) );
+			window.dispatchEvent(new CustomEvent('kasatria-login-success'));
 
 		};
 	</script>
@@ -59,7 +59,9 @@
 			margin-top: 0;
 		}
 
-		#container, #menu, #info {
+		#container,
+		#menu,
+		#info {
 			display: none;
 		}
 
@@ -172,9 +174,8 @@
 			<h2>Welcome</h2>
 			<p>Please sign in to continue</p>
 			<div id="g_id_onload"
-				 data-client_id="155359375894-k2ema6l9jvlu352vabkkqioeebka99fn.apps.googleusercontent.com"
-				 data-callback="handleCredentialResponse"
-				 data-auto_prompt="false">
+				data-client_id="155359375894-k2ema6l9jvlu352vabkkqioeebka99fn.apps.googleusercontent.com"
+				data-callback="handleCredentialResponse" data-auto_prompt="false">
 
 			</div>
 			<div class="g_id_signin" data-type="standard"></div>
@@ -190,6 +191,7 @@
 			<button id="sphere">SPHERE</button>
 			<button id="helix">HELIX</button>
 			<button id="grid">GRID</button>
+			<button id="tetrahedron">TETRAHEDRON</button>
 		</div>
 		<div id="legend">
 			<span class="legend-label">LOW</span>
@@ -214,17 +216,17 @@
 		import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
 		import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 
-		window.addEventListener( 'kasatria-login-success', () => {
+		window.addEventListener('kasatria-login-success', () => {
 
 			loadData();
 
-		} );
+		});
 
 		let camera, scene, renderer;
 		let controls;
 
 		const objects = [];
-		const targets = { table: [], sphere: [], helix: [], grid: [] };
+		const targets = { table: [], sphere: [], helix: [], grid: [], tetrahedron: [] };
 
 		let peopleData = [];
 
@@ -408,8 +410,67 @@
 
 			}
 
-			//
+			// tetrahedron (4 triangular faces, ~50 tiles per face)	
+			const tetraSize = 1000;
+			const tA = new THREE.Vector3(1, 1, 1).multiplyScalar(tetraSize);
+			const tB = new THREE.Vector3(1, -1, -1).multiplyScalar(tetraSize);
+			const tC = new THREE.Vector3(-1, 1, -1).multiplyScalar(tetraSize);
+			const tD = new THREE.Vector3(-1, -1, 1).multiplyScalar(tetraSize);
 
+			const tetraFaces = [
+				[tB, tC, tD], // opposite tA
+				[tA, tC, tD], // opposite tB
+				[tA, tB, tD], // opposite tC
+				[tA, tB, tC]  // opposite tD
+			];
+
+			const tetraRows = 10;
+			const pointsPerFace = Math.ceil(objects.length / tetraFaces.length);
+			let tetraObjIndex = 0;
+
+			for (let f = 0; f < tetraFaces.length; f++) {
+
+				const [A, B, C] = tetraFaces[f];
+
+				const normal = new THREE.Vector3()
+					.crossVectors(
+						new THREE.Vector3().subVectors(B, A),
+						new THREE.Vector3().subVectors(C, A)
+					)
+					.normalize();
+
+				const faceCenter = new THREE.Vector3().addVectors(A, B).add(C).divideScalar(3);
+				if (normal.dot(faceCenter) < 0) normal.negate();
+
+				let facePointCount = 0;
+
+				faceLoop:
+				for (let row = 0; row < tetraRows; row++) {
+
+					for (let col = 0; col <= row; col++) {
+
+						if (facePointCount >= pointsPerFace || tetraObjIndex >= objects.length) break faceLoop;
+
+						const t = row / (tetraRows - 1);
+						const left = new THREE.Vector3().lerpVectors(A, B, t);
+						const right = new THREE.Vector3().lerpVectors(A, C, t);
+						const s = row === 0 ? 0 : col / row;
+						const point = new THREE.Vector3().lerpVectors(left, right, s);
+
+						const object = new THREE.Object3D();
+						object.position.copy(point);
+
+						const lookTarget = new THREE.Vector3().addVectors(point, normal);
+						object.lookAt(lookTarget);
+
+						targets.tetrahedron.push(object);
+
+						facePointCount++;
+						tetraObjIndex++;
+
+					}
+				}
+			}
 			renderer = new CSS3DRenderer();
 			renderer.setSize(window.innerWidth, window.innerHeight);
 			document.getElementById('container').appendChild(renderer.domElement);
@@ -446,6 +507,13 @@
 			buttonGrid.addEventListener('click', function () {
 
 				transform(targets.grid, 2000);
+
+			});
+
+			const buttonTetrahedron = document.getElementById('tetrahedron');
+			buttonTetrahedron.addEventListener('click', function () {
+
+				transform(targets.tetrahedron, 2000);
 
 			});
 
